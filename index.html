@@ -98,14 +98,14 @@ input[type=text]::placeholder{color:var(--muted);}
 
 /* ── BOARD ── */
 .bwrap{position:relative;touch-action:none;}
-.board{display:grid;gap:5px;padding:10px;background:var(--surface);border-radius:18px;
+.board{display:grid;gap:10px;padding:14px;background:var(--surface);border-radius:18px;
   box-shadow:0 8px 32px rgba(0,0,0,.4),inset 0 1px 0 rgba(255,255,255,.05);
   user-select:none;-webkit-user-select:none;touch-action:none;
   -webkit-touch-callout:none;overscroll-behavior:none;}
-.tile{border-radius:10px;display:flex;align-items:center;justify-content:center;
+.tile{border-radius:14px;display:flex;align-items:center;justify-content:center;
   font-family:'Fredoka One',cursive;cursor:pointer;
-  background:var(--surface2);border:2px solid rgba(255,255,255,.08);
-  box-shadow:0 4px 10px rgba(0,0,0,.3),inset 0 1px 0 rgba(255,255,255,.08);
+  background:var(--surface2);border:2px solid rgba(255,255,255,.12);
+  box-shadow:0 5px 14px rgba(0,0,0,.4),inset 0 1px 0 rgba(255,255,255,.12);
   transition:transform .08s,background .08s;z-index:1;line-height:1;}
 .tile .qs{font-size:.5em;vertical-align:super;}
 .tile.sel{background:linear-gradient(135deg,#4a3080,#6b2fa0);border-color:var(--accent);transform:scale(1.08);
@@ -620,10 +620,12 @@ function renderBoard(){
   const size=G.gridSize;
   const board=$('board');
   board.innerHTML='';
-  // Calculate tile size based on grid and screen
-  const maxW=Math.min(window.innerWidth-24, 500);
-  const tileSize=Math.floor((maxW - 20 - (size-1)*5) / size);
-  const fontSize=Math.max(10, Math.floor(tileSize*0.42));
+  // Calculate tile size based on grid and screen — account for gap:10px, padding:14px
+  const gap = 10;
+  const boardPad = 28; // 14px each side
+  const maxW = Math.min(window.innerWidth - 24, 480);
+  const tileSize = Math.floor((maxW - boardPad - (size - 1) * gap) / size);
+  const fontSize = Math.max(10, Math.floor(tileSize * 0.40));
   board.style.gridTemplateColumns=`repeat(${size},${tileSize}px)`;
   board.style.gridTemplateRows=`repeat(${size},${tileSize}px)`;
   G.board.forEach((l,i)=>{
@@ -672,10 +674,10 @@ function tileIdxAt(clientX, clientY){
   for(const r of TILE_RECTS){
     if(clientX>=r.x1 && clientX<=r.x2 && clientY>=r.y1 && clientY<=r.y2) return r.idx;
   }
-  // Fallback: nearest tile centre within 1.2× half-tile radius (catches diagonal gaps)
+  // Fallback: nearest tile centre within 0.85× tile width (covers the 10px gap diagonally)
   if(TILE_RECTS.length===0) return null;
   const tileW = TILE_RECTS[0].x2 - TILE_RECTS[0].x1;
-  const threshold = tileW * 0.7;
+  const threshold = tileW * 0.85;
   let best=null, bestD=Infinity;
   for(const r of TILE_RECTS){
     const d=Math.hypot(clientX-r.cx, clientY-r.cy);
@@ -755,7 +757,7 @@ function drawPath(){
     const r=t.getBoundingClientRect();
     return(r.left-br.left+r.width/2)+','+(r.top-br.top+r.height/2);
   });
-  svg.innerHTML='<polyline points="'+pts.join(' ')+'" fill="none" stroke="rgba(155,89,182,.7)" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/>';
+  svg.innerHTML='<polyline points="'+pts.join(' ')+'" fill="none" stroke="rgba(155,89,182,.8)" stroke-width="6" stroke-linecap="round" stroke-linejoin="round"/>';
 }
 
 // ── WORD SUBMIT ───────────────────────────────────

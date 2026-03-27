@@ -100,7 +100,8 @@ input[type=text]::placeholder{color:var(--muted);}
 .bwrap{position:relative;touch-action:none;}
 .board{display:grid;gap:5px;padding:10px;background:var(--surface);border-radius:18px;
   box-shadow:0 8px 32px rgba(0,0,0,.4),inset 0 1px 0 rgba(255,255,255,.05);
-  user-select:none;-webkit-user-select:none;touch-action:none;}
+  user-select:none;-webkit-user-select:none;touch-action:none;
+  -webkit-touch-callout:none;overscroll-behavior:none;}
 .tile{border-radius:10px;display:flex;align-items:center;justify-content:center;
   font-family:'Fredoka One',cursive;cursor:pointer;
   background:var(--surface2);border:2px solid rgba(255,255,255,.08);
@@ -193,28 +194,10 @@ input[type=text]::placeholder{color:var(--muted);}
 </head>
 <body>
 
-<!-- ══ CONFIG ══ -->
-<div id="configScreen" class="screen active">
-  <div class="logo" style="font-size:2.2rem">Boggle Party</div>
-  <div class="cfg-card">
-    <h2>🔥 Firebase Setup</h2>
-    <p>Paste your Firebase project values. Saved in your browser — only needed once.</p>
-    <div id="cfgStatus" class="sbar"></div>
-    <div class="fl">https://boggle-1b3c5-default-rtdb.firebaseio.com</div>
-    <input type="text" id="cfg_db" placeholder="https://your-project-default-rtdb.firebaseio.com">
-    <div class="fl">AIzaSyCGgSfy-av8A9KUTT-WEiAvriXCdMR0kgo</div>
-    <input type="text" id="cfg_key" placeholder="AIzaSy...">
-    <div class="fl">boggle-1b3c5</div>
-    <input type="text" id="cfg_pid" placeholder="your-project-id">
-    <div class="fl">1:823813844029:web:6c5e9c550737c3bf784e54</div>
-    <input type="text" id="cfg_aid" placeholder="1:123456:web:abc...">
-    <button class="btn btn-p" onclick="saveConfig()">Save &amp; Connect →</button>
-    <p style="margin-top:10px;font-size:.76rem;color:var(--muted);">Firebase Console → ⚙️ Project Settings → Your apps → Web app</p>
-  </div>
-</div>
+<!-- config screen removed — Firebase is hardcoded in the script -->
 
 <!-- ══ LOBBY ══ -->
-<div id="lobbyScreen" class="screen">
+<div id="lobbyScreen" class="screen active">
   <div class="logo">Boggle Party</div>
   <p class="tagline">✨ Play with friends anywhere ✨</p>
   <div class="card">
@@ -257,9 +240,6 @@ input[type=text]::placeholder{color:var(--muted);}
     <input type="text" id="joinCode" placeholder="4-letter room code" maxlength="6"
       autocomplete="off" style="text-transform:uppercase;letter-spacing:4px;">
     <button class="btn btn-s" id="joinBtn" onclick="joinRoom()">Join Room</button>
-    <div style="margin-top:12px;text-align:center;">
-      <button onclick="showScreen('configScreen')" style="background:none;border:none;color:var(--muted);font-size:.76rem;cursor:pointer;font-family:'Nunito',sans-serif;text-decoration:underline;">⚙️ Change Firebase config</button>
-    </div>
   </div>
 </div>
 
@@ -301,7 +281,7 @@ input[type=text]::placeholder{color:var(--muted);}
   <div class="bwrap">
     <svg class="psvg" id="pathSvg" viewBox="0 0 0 0"></svg>
     <div class="board" id="board"
-      onmousedown="dragStart(event)"
+      onpointerdown="dragStart(event)"
       ontouchstart="dragStart(event)"></div>
   </div>
   <div class="wprev" id="wordPrev"><span class="ph">Drag tiles to spell words</span></div>
@@ -316,7 +296,7 @@ input[type=text]::placeholder{color:var(--muted);}
   <div class="rtitle">🏆 Round Over!</div>
   <div id="shameDiv" style="display:none" class="shame">
     <span class="emoji">💀</span>
-    <div class="stxt">Krwali Bezti</div>
+    <div class="stxt">Teri Krwali Bezti</div>
     <div class="sname" id="shameName"></div>
   </div>
   <div class="podium" id="podium"></div>
@@ -405,52 +385,28 @@ function initPickers(){
 }
 
 // ══════════════════════════════════════════════════
-// CONFIG
+// FIREBASE CONFIG — hardcoded, no login needed
 // ══════════════════════════════════════════════════
-function loadCfg(){ try{return JSON.parse(localStorage.getItem('bgp_cfg'));}catch{return null;} }
+const FIREBASE_CFG = {
+  apiKey:            "AIzaSyCGgSfy-av8A9KUTT-WEiAvriXCdMR0kgo",
+  authDomain:        "boggle-1b3c5.firebaseapp.com",
+  databaseURL:       "https://boggle-1b3c5-default-rtdb.firebaseio.com",
+  projectId:         "boggle-1b3c5",
+  storageBucket:     "boggle-1b3c5.firebasestorage.app",
+  messagingSenderId: "823813844029",
+  appId:             "1:823813844029:web:6c5e9c550737c3bf784e54",
+  measurementId:     "G-BTPHZYXTER"
+};
 
 window.addEventListener('DOMContentLoaded',()=>{
   initPickers();
-  const saved=loadCfg();
-  if(saved){
-    ['db','key','pid','aid'].forEach(k=>{ const el=document.getElementById('cfg_'+k); if(el&&saved[k]) el.value=saved[k]; });
-  }
-  if(saved&&saved.db&&saved.key){
-    if(initFirebase(saved)){ showScreen('lobbyScreen'); autoJoinFromUrl(); }
-    else cfgMsg('Saved config failed — re-enter below.','err');
-  }
-});
-
-function cfgMsg(m,t){ const el=document.getElementById('cfgStatus'); el.textContent=m; el.className='sbar '+t; }
-
-window.saveConfig=function(){
-  const cfg={
-    db:   document.getElementById('cfg_db').value.trim(),
-    key:  document.getElementById('cfg_key').value.trim(),
-    pid:  document.getElementById('cfg_pid').value.trim(),
-    aid:  document.getElementById('cfg_aid').value.trim(),
-  };
-  if(!cfg.db||!cfg.key||!cfg.pid||!cfg.aid){ cfgMsg('Fill in all four fields.','err'); return; }
-  if(!cfg.db.startsWith('https://')){ cfgMsg('Database URL must start with https://','err'); return; }
-  cfgMsg('Connecting…','info');
-  if(initFirebase(cfg)){
-    localStorage.setItem('bgp_cfg',JSON.stringify(cfg));
-    cfgMsg('Connected! ✅','ok');
-    setTimeout(()=>{ showScreen('lobbyScreen'); autoJoinFromUrl(); },600);
-  } else { cfgMsg('Connection failed — check your values.','err'); }
-};
-
-function initFirebase(cfg){
   try{
-    try{firebase.app().delete();}catch(e){}
-    firebase.initializeApp({
-      apiKey:cfg.key, authDomain:cfg.pid+'.firebaseapp.com',
-      databaseURL:cfg.db, projectId:cfg.pid,
-      storageBucket:cfg.pid+'.appspot.com', appId:cfg.aid
-    });
-    DB=firebase.database(); return true;
-  }catch(e){ console.error(e); return false; }
-}
+    firebase.initializeApp(FIREBASE_CFG);
+    DB=firebase.database();
+  }catch(e){ console.error('Firebase init failed:',e); alert('Firebase connection failed. Check config in the HTML file.'); return; }
+  showScreen('lobbyScreen');
+  autoJoinFromUrl();
+});
 
 function autoJoinFromUrl(){
   const r=new URLSearchParams(location.search).get('room');
@@ -690,38 +646,82 @@ function adj(a,b){
   return Math.abs(ar-br)<=1&&Math.abs(ac-bc)<=1&&a!==b;
 }
 
-// ── SMOOTH DRAG (fixed for diagonal) ─────────────
+// ── SMOOTH DRAG — bounding-box math, no DOM hit-testing ──
+// We cache tile rects once per drag so every pointer position
+// is resolved by pure arithmetic — works perfectly diagonally.
+let TILE_RECTS = []; // {idx, cx, cy, x1, y1, x2, y2}
+
+function cacheTileRects(){
+  const board = $('board');
+  const br = board.getBoundingClientRect();
+  TILE_RECTS = [];
+  board.querySelectorAll('.tile').forEach(t=>{
+    const r = t.getBoundingClientRect();
+    TILE_RECTS.push({
+      idx: parseInt(t.dataset.idx),
+      x1: r.left, y1: r.top,
+      x2: r.right, y2: r.bottom,
+      cx: r.left + r.width/2,
+      cy: r.top  + r.height/2
+    });
+  });
+}
+
+function tileIdxAt(clientX, clientY){
+  // Primary: is point inside a tile rect?
+  for(const r of TILE_RECTS){
+    if(clientX>=r.x1 && clientX<=r.x2 && clientY>=r.y1 && clientY<=r.y2) return r.idx;
+  }
+  // Fallback: nearest tile centre within 1.2× half-tile radius (catches diagonal gaps)
+  if(TILE_RECTS.length===0) return null;
+  const tileW = TILE_RECTS[0].x2 - TILE_RECTS[0].x1;
+  const threshold = tileW * 0.7;
+  let best=null, bestD=Infinity;
+  for(const r of TILE_RECTS){
+    const d=Math.hypot(clientX-r.cx, clientY-r.cy);
+    if(d<threshold && d<bestD){ bestD=d; best=r.idx; }
+  }
+  return best;
+}
+
+function getPointer(e){
+  if(e.touches && e.touches.length>0)    return {x:e.touches[0].clientX,      y:e.touches[0].clientY};
+  if(e.changedTouches && e.changedTouches.length>0) return {x:e.changedTouches[0].clientX, y:e.changedTouches[0].clientY};
+  return {x:e.clientX, y:e.clientY};
+}
+
 window.dragStart=function(e){
-  if(!G.active)return; e.preventDefault();
+  if(!G.active) return;
+  e.preventDefault();
   G.path=[];
-  const t=tileAt(e); if(t!==null)pick(t);
+  cacheTileRects();          // snapshot rects once — fast
+  const {x,y}=getPointer(e);
+  const t=tileIdxAt(x,y); if(t!==null) pick(t);
 
   function onMove(ev){
     ev.preventDefault();
-    const t=tileAt(ev); if(t!==null)pick(t);
+    const {x,y}=getPointer(ev);
+    const t=tileIdxAt(x,y); if(t!==null) pick(t);
   }
   function onEnd(){
-    document.removeEventListener('mousemove',onMove);
-    document.removeEventListener('mouseup',onEnd);
-    document.removeEventListener('touchmove',onMove);
-    document.removeEventListener('touchend',onEnd);
+    document.removeEventListener('pointermove', onMove);
+    document.removeEventListener('pointerup',   onEnd);
+    document.removeEventListener('touchmove',   onMove);
+    document.removeEventListener('touchend',    onEnd);
     submitWord();
   }
-  document.addEventListener('mousemove',onMove,{passive:false});
-  document.addEventListener('mouseup',onEnd);
-  document.addEventListener('touchmove',onMove,{passive:false});
-  document.addEventListener('touchend',onEnd);
+  // Use Pointer Events when available (unified mouse+touch, no coordinate bugs)
+  if(window.PointerEvent){
+    $('board').setPointerCapture && e.pointerId && $('board').setPointerCapture(e.pointerId);
+    document.addEventListener('pointermove', onMove, {passive:false});
+    document.addEventListener('pointerup',   onEnd);
+  } else {
+    document.addEventListener('touchmove', onMove, {passive:false});
+    document.addEventListener('touchend',  onEnd);
+    document.addEventListener('mousemove', onMove, {passive:false});
+    document.addEventListener('mouseup',   onEnd);
+  }
 };
-
-function tileAt(e){
-  // Use clientX/Y for accurate hit-testing including diagonals
-  const touch=e.touches&&e.touches.length>0?e.touches[0]:(e.changedTouches&&e.changedTouches.length>0?e.changedTouches[0]:null);
-  const pt=touch||e;
-  const el=document.elementFromPoint(pt.clientX,pt.clientY);
-  if(!el)return null;
-  const t=el.closest('.tile');
-  return t?parseInt(t.dataset.idx):null;
-}
 
 function pick(i){
   const p=G.path;

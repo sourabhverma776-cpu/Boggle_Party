@@ -98,7 +98,7 @@ input[type=text]::placeholder{color:var(--muted);}
 
 /* ── BOARD ── */
 .bwrap{position:relative;touch-action:none;}
-.board{display:grid;gap:10px;padding:14px;background:var(--surface);border-radius:18px;
+.board{display:grid;gap:14px;padding:16px;background:var(--surface);border-radius:20px;
   box-shadow:0 8px 32px rgba(0,0,0,.4),inset 0 1px 0 rgba(255,255,255,.05);
   user-select:none;-webkit-user-select:none;touch-action:none;
   -webkit-touch-callout:none;overscroll-behavior:none;}
@@ -620,9 +620,9 @@ function renderBoard(){
   const size=G.gridSize;
   const board=$('board');
   board.innerHTML='';
-  // Calculate tile size based on grid and screen — account for gap:10px, padding:14px
-  const gap = 10;
-  const boardPad = 28; // 14px each side
+  // Calculate tile size: gap=14px, padding=16px each side
+  const gap = 14;
+  const boardPad = 32; // 16px each side
   const maxW = Math.min(window.innerWidth - 24, 480);
   const tileSize = Math.floor((maxW - boardPad - (size - 1) * gap) / size);
   const fontSize = Math.max(10, Math.floor(tileSize * 0.40));
@@ -648,47 +648,44 @@ function adj(a,b){
   return Math.abs(ar-br)<=1&&Math.abs(ac-bc)<=1&&a!==b;
 }
 
-// ── SMOOTH DRAG — bounding-box math, no DOM hit-testing ──
-// We cache tile rects once per drag so every pointer position
-// is resolved by pure arithmetic — works perfectly diagonally.
-let TILE_RECTS = []; // {idx, cx, cy, x1, y1, x2, y2}
+// ── SMOOTH DRAG — strict bounding-box only ──────────────
+// Only select a tile when finger is INSIDE its rectangle.
+// No fuzzy nearest-centre fallback — that's what caused accidental picks.
+let TILE_RECTS = [];
 
 function cacheTileRects(){
-  const board = $('board');
-  const br = board.getBoundingClientRect();
   TILE_RECTS = [];
-  board.querySelectorAll('.tile').forEach(t=>{
+  document.querySelectorAll('.tile').forEach(t=>{
     const r = t.getBoundingClientRect();
+    const w = r.width, h = r.height;
+    // Shrink hit zone to 82% of tile — creates dead zone at tile edges
+    // so finger must be clearly inside the tile to register it
+    const shrinkX = w * 0.09;
+    const shrinkY = h * 0.09;
     TILE_RECTS.push({
       idx: parseInt(t.dataset.idx),
-      x1: r.left, y1: r.top,
-      x2: r.right, y2: r.bottom,
-      cx: r.left + r.width/2,
-      cy: r.top  + r.height/2
+      x1: r.left  + shrinkX,
+      y1: r.top   + shrinkY,
+      x2: r.right  - shrinkX,
+      y2: r.bottom - shrinkY,
+      cx: (r.left+r.right)/2,
+      cy: (r.top+r.bottom)/2
     });
   });
 }
 
 function tileIdxAt(clientX, clientY){
-  // Primary: is point inside a tile rect?
   for(const r of TILE_RECTS){
     if(clientX>=r.x1 && clientX<=r.x2 && clientY>=r.y1 && clientY<=r.y2) return r.idx;
   }
-  // Fallback: nearest tile centre within 0.85× tile width (covers the 10px gap diagonally)
-  if(TILE_RECTS.length===0) return null;
-  const tileW = TILE_RECTS[0].x2 - TILE_RECTS[0].x1;
-  const threshold = tileW * 0.85;
-  let best=null, bestD=Infinity;
-  for(const r of TILE_RECTS){
-    const d=Math.hypot(clientX-r.cx, clientY-r.cy);
-    if(d<threshold && d<bestD){ bestD=d; best=r.idx; }
-  }
-  return best;
+  return null; // finger is in the gap — do nothing
 }
 
 function getPointer(e){
-  if(e.touches && e.touches.length>0)    return {x:e.touches[0].clientX,      y:e.touches[0].clientY};
-  if(e.changedTouches && e.changedTouches.length>0) return {x:e.changedTouches[0].clientX, y:e.changedTouches[0].clientY};
+  if(e.touches && e.touches.length>0)
+    return {x:e.touches[0].clientX, y:e.touches[0].clientY};
+  if(e.changedTouches && e.changedTouches.length>0)
+    return {x:e.changedTouches[0].clientX, y:e.changedTouches[0].clientY};
   return {x:e.clientX, y:e.clientY};
 }
 
@@ -696,7 +693,7 @@ window.dragStart=function(e){
   if(!G.active) return;
   e.preventDefault();
   G.path=[];
-  cacheTileRects();          // snapshot rects once — fast
+  cacheTileRects();
   const {x,y}=getPointer(e);
   const t=tileIdxAt(x,y); if(t!==null) pick(t);
 
@@ -710,11 +707,11 @@ window.dragStart=function(e){
     document.removeEventListener('pointerup',   onEnd);
     document.removeEventListener('touchmove',   onMove);
     document.removeEventListener('touchend',    onEnd);
+    document.removeEventListener('mousemove',   onMove);
+    document.removeEventListener('mouseup',     onEnd);
     submitWord();
   }
-  // Use Pointer Events when available (unified mouse+touch, no coordinate bugs)
   if(window.PointerEvent){
-    $('board').setPointerCapture && e.pointerId && $('board').setPointerCapture(e.pointerId);
     document.addEventListener('pointermove', onMove, {passive:false});
     document.addEventListener('pointerup',   onEnd);
   } else {

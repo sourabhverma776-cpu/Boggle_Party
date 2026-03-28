@@ -200,9 +200,30 @@ input[type=text]::placeholder{color:var(--muted);}
 <div id="lobbyScreen" class="screen active">
   <div class="logo">Boggle Party</div>
   <p class="tagline">✨ Play with friends anywhere ✨</p>
-  <div class="card">
+
+  <!-- JOIN SECTION — shown to everyone by default -->
+  <div class="card" id="joinCard">
+    <h2>🔗 Join a Room</h2>
+    <input type="text" id="joinName" placeholder="Your name" maxlength="16" autocomplete="off">
+    <input type="text" id="joinCode" placeholder="4-letter room code" maxlength="6"
+      autocomplete="off" style="text-transform:uppercase;letter-spacing:4px;">
+    <input type="text" id="joinPass" placeholder="Room password" maxlength="20" autocomplete="off">
+    <button class="btn btn-s" id="joinBtn" onclick="joinRoom()">Join Room</button>
+    <div class="div">— are you the host? —</div>
+    <div style="display:flex;gap:8px;">
+      <input type="password" id="hostPin" placeholder="Enter host PIN" maxlength="20"
+        autocomplete="off" style="flex:1;margin-bottom:0;">
+      <button onclick="unlockHost()" class="btn btn-s" style="width:auto;padding:12px 16px;flex-shrink:0;">Unlock</button>
+    </div>
+  </div>
+
+  <!-- CREATE SECTION — hidden until correct host PIN entered -->
+  <div class="card" id="createCard" style="display:none;">
     <h2>🎮 Create a Room</h2>
     <input type="text" id="createName" placeholder="Your name" maxlength="16" autocomplete="off">
+
+    <div class="fl">Room Password <span style="color:var(--muted);font-weight:600;font-size:.75rem;">(share this with friends)</span></div>
+    <input type="text" id="createPass" placeholder="e.g. party123" maxlength="20" autocomplete="off">
 
     <div class="fl">Grid Size</div>
     <div class="chips" id="gridPicker">
@@ -234,12 +255,6 @@ input[type=text]::placeholder{color:var(--muted);}
     </div>
 
     <button class="btn btn-p" id="createBtn" onclick="createRoom()">Create Room</button>
-    <div class="div">— or join a room —</div>
-    <h2>🔗 Join a Room</h2>
-    <input type="text" id="joinName" placeholder="Your name" maxlength="16" autocomplete="off">
-    <input type="text" id="joinCode" placeholder="4-letter room code" maxlength="6"
-      autocomplete="off" style="text-transform:uppercase;letter-spacing:4px;">
-    <button class="btn btn-s" id="joinBtn" onclick="joinRoom()">Join Room</button>
   </div>
 </div>
 
@@ -272,9 +287,12 @@ input[type=text]::placeholder{color:var(--muted);}
   <div class="ghdr">
     <div class="rlbl">Round <span id="rNum">1</span>/<span id="rTotal">1</span></div>
     <div class="tcircle" id="timerEl">120</div>
-    <div class="myscore">
-      <span class="snum" id="myPts">0</span>
-      <span class="slbl">pts</span>
+    <div style="display:flex;align-items:center;gap:8px;">
+      <button id="musicBtn" onclick="toggleMusic()" style="background:var(--surface2);border:2px solid rgba(255,255,255,.1);border-radius:50%;width:36px;height:36px;cursor:pointer;font-size:1.1rem;display:flex;align-items:center;justify-content:center;transition:all .2s;" title="Toggle music">🎵</button>
+      <div class="myscore">
+        <span class="snum" id="myPts">0</span>
+        <span class="slbl">pts</span>
+      </div>
     </div>
   </div>
   <div class="lscores" id="liveScores"></div>
@@ -398,6 +416,33 @@ const FIREBASE_CFG = {
   measurementId:     "G-BTPHZYXTER"
 };
 
+// ══════════════════════════════════════════════════
+// HOST PIN — only you know this. Change it to anything
+// you want before uploading. Never share this PIN.
+// ══════════════════════════════════════════════════
+const HOST_PIN_HASH = '5e884898da28047151d0e56f8dc6292773603d0d6aabbdd62a11ef721d1542d8'; // = "password"
+// To change your PIN: pick any word, get its SHA-256 hash from
+// https://emn178.github.io/online-tools/sha256.html and paste it above.
+
+window.unlockHost = async function(){
+  const pin = $('hostPin').value.trim();
+  if(!pin){ toast('Enter your host PIN','err'); return; }
+  const hash = await hashStr(pin);
+  if(hash === HOST_PIN_HASH){
+    $('createCard').style.display = 'block';
+    $('hostPin').value = '';
+    // hide the PIN row so it's clean
+    $('hostPin').closest('div').style.display='none';
+    $('hostPin').closest('div').previousElementSibling.style.display='none';
+    toast('Host unlocked! 🔓','ok');
+    $('createName').focus();
+  } else {
+    toast('Wrong PIN!','err');
+    $('hostPin').value='';
+  }
+};
+
+// Allow pressing Enter on PIN field
 window.addEventListener('DOMContentLoaded',()=>{
   initPickers();
   try{
@@ -406,11 +451,19 @@ window.addEventListener('DOMContentLoaded',()=>{
   }catch(e){ console.error('Firebase init failed:',e); alert('Firebase connection failed. Check config in the HTML file.'); return; }
   showScreen('lobbyScreen');
   autoJoinFromUrl();
+  document.getElementById('hostPin').addEventListener('keydown', e=>{ if(e.key==='Enter') unlockHost(); });
 });
 
 function autoJoinFromUrl(){
   const r=new URLSearchParams(location.search).get('room');
-  if(r){ document.getElementById('joinCode').value=r.toUpperCase(); document.getElementById('joinName').focus(); toast('Room '+r+' — enter your name!'); }
+  if(r){
+    // Arrived via invite link — pre-fill code, hide host PIN row entirely
+    $('hostPin').closest('div').style.display='none';
+    $('hostPin').closest('div').previousElementSibling.style.display='none';
+    document.getElementById('joinCode').value=r.toUpperCase();
+    document.getElementById('joinName').focus();
+    toast('Enter your name & password to join!');
+  }
 }
 
 // ══════════════════════════════════════════════════
@@ -436,7 +489,9 @@ function pickerVal(id){ return document.querySelector('#'+id+' .on')?.dataset.va
 window.createRoom=async function(){
   if(!DB){toast('Firebase not connected','err');return;}
   const name=document.getElementById('createName').value.trim();
+  const pass=document.getElementById('createPass').value.trim();
   if(!name){toast('Enter your name!','err');return;}
+  if(!pass){toast('Set a room password!','err');return;}
   const gridSize=parseInt(pickerVal('gridPicker'));
   const dur=parseInt(pickerVal('durPicker'));
   const minLen=parseInt(pickerVal('minLenPicker'));
@@ -445,11 +500,14 @@ window.createRoom=async function(){
      round:1,totalRounds,lastStatus:'',matchWins:{}};
   busy('createBtn',true);
   try{
+    // Store a simple hash of the password (not plaintext)
+    const passHash=await hashStr(pass);
     await DB.ref('rooms/'+G.code).set({
       host:G.pid,status:'waiting',
       roundDuration:dur,roundNum:1,totalRounds,gridSize,minWordLen:minLen,
       board:[],scores:{[G.pid]:0},words:{[G.pid]:[]},
       matchWins:{[G.pid]:0},
+      passHash,
       players:{[G.pid]:{name,id:G.pid}},ts:Date.now()
     });
     listenRoom(); gotoWaiting();
@@ -461,8 +519,10 @@ window.joinRoom=async function(){
   if(!DB){toast('Firebase not connected','err');return;}
   const name=document.getElementById('joinName').value.trim();
   const code=document.getElementById('joinCode').value.trim().toUpperCase();
+  const pass=document.getElementById('joinPass').value.trim();
   if(!name){toast('Enter your name!','err');return;}
   if(code.length<4){toast('Enter the 4-letter code!','err');return;}
+  if(!pass){toast('Enter the room password!','err');return;}
   G={...G,name,pid:genId(),code,isHost:false,lastStatus:''};
   busy('joinBtn',true);
   try{
@@ -470,6 +530,9 @@ window.joinRoom=async function(){
     if(!snap.exists()){toast('Room not found — check the code.','err');return;}
     const room=snap.val();
     if(room.status==='playing'){toast('Game already started!','err');return;}
+    // Verify password
+    const passHash=await hashStr(pass);
+    if(passHash!==room.passHash){toast('Wrong password! Ask the host.','err');return;}
     await DB.ref('rooms/'+code+'/players/'+G.pid).set({name,id:G.pid});
     await DB.ref('rooms/'+code+'/scores/'+G.pid).set(0);
     await DB.ref('rooms/'+code+'/words/'+G.pid).set([]);
@@ -478,6 +541,12 @@ window.joinRoom=async function(){
   }catch(e){toast('Error: '+e.message,'err');console.error(e);}
   finally{busy('joinBtn',false);}
 };
+
+// Simple SHA-256 hash using Web Crypto API
+async function hashStr(str){
+  const buf=await crypto.subtle.digest('SHA-256', new TextEncoder().encode(str));
+  return Array.from(new Uint8Array(buf)).map(b=>b.toString(16).padStart(2,'0')).join('');
+}
 
 window.leaveRoom=function(){
   stopListen(); clearInterval(G.ticker);
@@ -578,8 +647,116 @@ window.nextRound=async function(){
 };
 
 // ══════════════════════════════════════════════════
-// BOARD GENERATION
+// BACKGROUND MUSIC  — Web Audio API, no files needed
 // ══════════════════════════════════════════════════
+let ACtx=null, musicNodes=[], musicOn=false, musicStarted=false;
+
+function initAudio(){
+  if(ACtx) return;
+  ACtx=new(window.AudioContext||window.webkitAudioContext)();
+}
+
+// Upbeat looping background music using oscillators + rhythm
+function startMusic(){
+  if(musicStarted||!musicOn) return;
+  initAudio();
+  if(ACtx.state==='suspended') ACtx.resume();
+  musicStarted=true;
+  musicNodes=[];
+
+  const master=ACtx.createGain(); master.gain.value=0.18; master.connect(ACtx.destination);
+  musicNodes.push(master);
+
+  // ── Melody notes (pentatonic scale — always sounds good)
+  const melody=[523,587,659,784,880,784,659,587, 523,659,784,880,1047,880,784,659];
+  const bpm=128, beat=60/bpm;
+  let t=ACtx.currentTime+0.05;
+
+  function scheduleMelody(){
+    melody.forEach((freq,i)=>{
+      const osc=ACtx.createOscillator();
+      const env=ACtx.createGain();
+      osc.type='sine'; osc.frequency.value=freq;
+      env.gain.setValueAtTime(0,t+i*beat*0.5);
+      env.gain.linearRampToValueAtTime(0.6,t+i*beat*0.5+0.02);
+      env.gain.exponentialRampToValueAtTime(0.001,t+i*beat*0.5+beat*0.45);
+      osc.connect(env); env.connect(master);
+      osc.start(t+i*beat*0.5); osc.stop(t+i*beat*0.5+beat*0.5);
+      musicNodes.push(osc,env);
+    });
+  }
+
+  // ── Bass line
+  const bass=[130,130,146,130,116,130,146,130];
+  function scheduleBass(){
+    bass.forEach((freq,i)=>{
+      const osc=ACtx.createOscillator();
+      const env=ACtx.createGain();
+      osc.type='triangle'; osc.frequency.value=freq;
+      env.gain.setValueAtTime(0,t+i*beat);
+      env.gain.linearRampToValueAtTime(0.5,t+i*beat+0.01);
+      env.gain.exponentialRampToValueAtTime(0.001,t+i*beat+beat*0.8);
+      osc.connect(env); env.connect(master);
+      osc.start(t+i*beat); osc.stop(t+i*beat+beat);
+      musicNodes.push(osc,env);
+    });
+  }
+
+  // ── Percussion (kick + hihat via noise)
+  function schedulePerc(){
+    for(let i=0;i<8;i++){
+      // Kick on beats 1,3,5,7
+      if(i%2===0){
+        const osc=ACtx.createOscillator(), env=ACtx.createGain();
+        osc.type='sine'; osc.frequency.setValueAtTime(150,t+i*beat);
+        osc.frequency.exponentialRampToValueAtTime(40,t+i*beat+0.1);
+        env.gain.setValueAtTime(1,t+i*beat); env.gain.exponentialRampToValueAtTime(0.001,t+i*beat+0.15);
+        osc.connect(env); env.connect(master);
+        osc.start(t+i*beat); osc.stop(t+i*beat+0.2);
+        musicNodes.push(osc,env);
+      }
+      // Hi-hat every beat
+      const buf=ACtx.createBuffer(1,ACtx.sampleRate*0.05,ACtx.sampleRate);
+      const data=buf.getChannelData(0);
+      for(let j=0;j<data.length;j++) data[j]=(Math.random()*2-1)*0.3;
+      const src=ACtx.createBufferSource(), hpf=ACtx.createBiquadFilter(), henv=ACtx.createGain();
+      hpf.type='highpass'; hpf.frequency.value=8000;
+      henv.gain.setValueAtTime(0.4,t+i*beat); henv.gain.exponentialRampToValueAtTime(0.001,t+i*beat+0.05);
+      src.buffer=buf; src.connect(hpf); hpf.connect(henv); henv.connect(master);
+      src.start(t+i*beat); musicNodes.push(src,hpf,henv);
+    }
+  }
+
+  scheduleMelody(); scheduleBass(); schedulePerc();
+
+  // Loop every 8 beats
+  const loopLen=beat*8;
+  function loop(){
+    if(!musicStarted) return;
+    t+=loopLen;
+    scheduleMelody(); scheduleBass(); schedulePerc();
+    setTimeout(loop,(loopLen-0.2)*1000);
+  }
+  setTimeout(loop,(loopLen-0.2)*1000);
+}
+
+function stopMusic(){
+  musicStarted=false;
+  musicNodes.forEach(n=>{ try{n.stop&&n.stop(); n.disconnect&&n.disconnect();}catch(e){} });
+  musicNodes=[];
+}
+
+window.toggleMusic=function(){
+  musicOn=!musicOn;
+  const btn=$('musicBtn');
+  if(musicOn){ btn.textContent='🔊'; btn.style.borderColor='var(--accent)'; startMusic(); }
+  else        { btn.textContent='🔇'; btn.style.borderColor='rgba(255,255,255,.1)'; stopMusic(); }
+};
+
+// Auto-stop music when round ends, restart on new round
+function musicOnGameStart(){ if(musicOn) startMusic(); }
+function musicOnGameEnd()  { stopMusic(); musicStarted=false; }
+
 function mkBoard(size){
   const n=size*size;
   const allDice=[...DICE4,...EXTRA_DICE];
@@ -613,6 +790,7 @@ function startGameScreen(){
   renderBoard();
   DB.ref('rooms/'+G.code).update({status:'playing'});
   startTicker();
+  musicOnGameStart();
 }
 
 // ── BOARD RENDER ──────────────────────────────────
@@ -820,6 +998,7 @@ function startTicker(){
 
 function endRound(){
   pushScore();
+  musicOnGameEnd();
   if(G.isHost){
     setTimeout(async()=>{
       // Tally round winner and update matchWins

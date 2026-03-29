@@ -4,9 +4,22 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
 <title>Boggle Party 🎲</title>
-<!-- Firebase loaded FIRST so it's available to all scripts below -->
-<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
-<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-database-compat.js"></script>
+<!-- Firebase — primary CDN with fallback -->
+<script>
+// We'll load Firebase dynamically with fallbacks
+window.__fbLoaded = false;
+</script>
+<script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js"
+  onerror="window.__fbPrimaryFailed=true"></script>
+<script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-database-compat.js"
+  onerror="window.__fbPrimaryFailed=true"></script>
+<!-- Fallback: unpkg CDN -->
+<script>
+if(typeof firebase === 'undefined'){
+  document.write('<script src="https://unpkg.com/firebase@10.7.1/firebase-app-compat.js"><\/script>');
+  document.write('<script src="https://unpkg.com/firebase@10.7.1/firebase-database-compat.js"><\/script>');
+}
+</script>
 <style>
 @import url('https://fonts.googleapis.com/css2?family=Fredoka+One&family=Nunito:wght@400;600;700;800;900&display=swap');
 :root{
@@ -529,16 +542,53 @@ window.unlockHost = async function(){
 };
 
 // Allow pressing Enter on PIN field
-window.addEventListener('DOMContentLoaded',()=>{
+// Wait for Firebase to be ready — retries every 100ms up to 10 seconds
+function waitForFirebase(attempts){
+  attempts = attempts || 0;
+  if(typeof firebase !== 'undefined'){
+    // Firebase is ready — boot the app
+    bootApp();
+    return;
+  }
+  if(attempts > 100){
+    // 10 seconds passed — show error
+    document.body.innerHTML=`
+      <div style="font-family:sans-serif;padding:40px;text-align:center;color:#f0eaff;background:#0f0c1a;min-height:100vh;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:16px;">
+        <div style="font-size:3rem">⚠️</div>
+        <h2 style="color:#f7c948;font-family:serif">Could Not Connect</h2>
+        <p style="color:#8b82a7;max-width:340px;line-height:1.7;">
+          Firebase failed to load after 10 seconds. Please try:<br><br>
+          <b style="color:#f0eaff">1.</b> Disable any ad blocker for this site<br>
+          <b style="color:#f0eaff">2.</b> Check your internet connection<br>
+          <b style="color:#f0eaff">3.</b> Open in Chrome or Safari<br>
+          <b style="color:#f0eaff">4.</b> Try private/incognito mode
+        </p>
+        <button onclick="location.reload()" style="background:#f7c948;border:none;border-radius:12px;padding:13px 28px;font-weight:800;font-size:1rem;cursor:pointer;color:#1a1200;margin-top:8px;">
+          🔄 Retry
+        </button>
+      </div>`;
+    return;
+  }
+  setTimeout(()=>waitForFirebase(attempts+1), 100);
+}
+
+function bootApp(){
   initPickers();
   try{
     firebase.initializeApp(FIREBASE_CFG);
-    DB=firebase.database();
-  }catch(e){ console.error('Firebase init failed:',e); alert('Firebase connection failed. Check config in the HTML file.'); return; }
+    DB = firebase.database();
+  }catch(e){
+    console.error('Firebase init failed:',e);
+    alert('Firebase config error:\n\n'+e.message+'\n\nCheck your config values in the HTML file.');
+    return;
+  }
   showScreen('lobbyScreen');
   autoJoinFromUrl();
-  document.getElementById('hostPin').addEventListener('keydown', e=>{ if(e.key==='Enter') unlockHost(); });
-});
+  const pinEl = document.getElementById('hostPin');
+  if(pinEl) pinEl.addEventListener('keydown', e=>{ if(e.key==='Enter') unlockHost(); });
+}
+
+window.addEventListener('DOMContentLoaded', ()=>waitForFirebase(0));
 
 function autoJoinFromUrl(){
   const r=new URLSearchParams(location.search).get('room');
@@ -1204,6 +1254,7 @@ function showChampion(room){
       <span class="mct">${w}</span>
     </div>`;
   }).join('');
+}
 
 // ══════════════════════════════════════════════════
 // CHAT SYSTEM
